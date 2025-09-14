@@ -7,7 +7,7 @@ os.environ['OPENCV_LOG_LEVEL'] = 'SILENT'
 model = YOLO("yolo11n.pt")
 
 # Open the video file
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 
 print("hello")
 
