@@ -7,7 +7,7 @@ os.environ['OPENCV_LOG_LEVEL'] = 'SILENT'
 model = YOLO("yolo11n.pt")
 
 # Open the video file
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1)
 
 print("hello")
 
@@ -25,13 +25,14 @@ while cap.isOpened():
 
         # Display the annotated frame
             cv2.imshow("YOLO Inference", annotated_frame)
-            xCenterOfBox = (result.boxes.xyxyn[0][0] + result.boxes.xyxyn[0][2]) / 2
-            if xCenterOfBox < 0.45:
-                print("Object is on the left side of the frame")
-            elif xCenterOfBox > 0.55:
-                print("Object is on the right side of the frame")
-            else:
-                print("Object is in the center of the frame")
+            if result.boxes.cls == "person":
+                xCenterOfBox = (result.boxes.xyxyn[0][0] + result.boxes.xyxyn[0][2]) / 2
+                if xCenterOfBox < 0.45:
+                    print("Object is on the left side of the frame")
+                elif xCenterOfBox > 0.55:
+                    print("Object is on the right side of the frame")
+                else:
+                    print("Object is in the center of the frame")
 
 
         # Break the loop if 'q' is pressed
