@@ -1,0 +1,1 @@
+//to program ESPCAM, connect GPIO 0 to GND, press reset, allow upload to complete then disconnect GPIO 0 and press reset button
