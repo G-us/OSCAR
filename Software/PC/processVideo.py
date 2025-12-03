@@ -1,47 +1,50 @@
 import cv2
-import os
-from ultralytics import YOLO
+import matplotlib.pyplot as plt
+import cvlib as cv
+import urllib.request
+import numpy as np
+from cvlib.object_detection import draw_bbox
+import concurrent.futures
 
-os.environ['OPENCV_LOG_LEVEL'] = 'SILENT'
-# Load the YOLO model
-model = YOLO("yolo11n.pt")
-
-# Open the video file
-cap = cv2.VideoCapture(1)
-
-print("hello")
-
-# Loop through the video frames
-while cap.isOpened():
-    # Read a frame from the video
-    success, frame = cap.read()
-
-    if success:
-        # Run YOLO inference on the frame
-        results = model(frame, stream = True)
-        for result in results:
-        # Visualize the results on the frame
-            annotated_frame = result.plot()
-
-        # Display the annotated frame
-            cv2.imshow("YOLO Inference", annotated_frame)
-            if result.boxes.cls == "person":
-                xCenterOfBox = (result.boxes.xyxyn[0][0] + result.boxes.xyxyn[0][2]) / 2
-                if xCenterOfBox < 0.45:
-                    print("Object is on the left side of the frame")
-                elif xCenterOfBox > 0.55:
-                    print("Object is on the right side of the frame")
-                else:
-                    print("Object is in the center of the frame")
+url = 'http://172.20.10.2/cam-lo.jpg'
+im = None
 
 
-        # Break the loop if 'q' is pressed
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+def run1():
+    cv2.namedWindow("live transmission", cv2.WINDOW_AUTOSIZE)
+    while True:
+        img_resp = urllib.request.urlopen(url)
+        imgnp = np.array(bytearray(img_resp.read()), dtype = np.uint8)
+        im = cv2.imdecode(imgnp, -1)
+
+        cv2.imshow('live transmission', im)
+        key = cv2.waitKey(5)
+        if key == ord('q'):
             break
-    else:
-        # Break the loop if the end of the video is reached
-        break
 
-# Release the video capture object and close the display window
-cap.release()
-cv2.destroyAllWindows()
+    cv2.destroyAllWindows()
+
+
+def run2():
+    cv2.namedWindow("detection", cv2.WINDOW_AUTOSIZE)
+    while True:
+        img_resp = urllib.request.urlopen(url)
+        imgnp = np.array(bytearray(img_resp.read()), dtype = np.uint8)
+        im = cv2.imdecode(imgnp, -1)
+
+        bbox, label, conf = cv.detect_common_objects(im)
+        im = draw_bbox(im, bbox, label, conf)
+
+        cv2.imshow('detection', im)
+        key = cv2.waitKey(5)
+        if key == ord('q'):
+            break
+
+    cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    print("started")
+    with concurrent.futures.ProcessPoolExecutor() as executer:
+        f1 = executer.submit(run1)
+        f2 = executer.submit(run2)
