@@ -64,7 +64,7 @@ void setup()
     Config cfg;
     cfg.setPins(pins::AiThinker);
     cfg.setResolution(hiRes);
-    cfg.setBufferCount(3);
+    cfg.setBufferCount(2);
     cfg.setJpeg(80);
 
     bool ok = Camera.begin(cfg);
