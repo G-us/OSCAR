@@ -5,12 +5,12 @@
 const int stepsPerRevolution = 200;
 
 // Create Instance of Stepper library
-Stepper myStepper(stepsPerRevolution, 12, 14, 10, 9);
+Stepper myStepper(stepsPerRevolution, 2, 13, 14, 15);
 
 void setup()
 {
   // set the speed at 20 rpm:
-  myStepper.setSpeed(20);
+  myStepper.setSpeed(40);
   // initialize the serial port:
   Serial.begin(115200);
 }
