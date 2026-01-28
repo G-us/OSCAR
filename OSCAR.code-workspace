@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "Software/PC"
+		},
+		{
+			"path": "Software/ESP/OSCARCAM"
+		},
+		{
+			"path": "Software/ESP/OSCARCONT"
+		}
+	],
+	"settings": {}
+}
