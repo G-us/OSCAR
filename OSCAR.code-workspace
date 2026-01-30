@@ -8,6 +8,14 @@
 		},
 		{
 			"path": "Software/ESP/OSCARCONT"
+		},
+		{
+			"name": "OSCARESPNOWTEST",
+			"path": "Software/ESP/OSCARESPNOWTEST"
+		},
+		{
+			"name": "OSCARMOTORTEST",
+			"path": "Software/ESP/OSCARCONT/OSCARMOTORTEST"
 		}
 	],
 	"settings": {}

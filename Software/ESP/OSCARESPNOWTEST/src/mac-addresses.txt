@@ -1,0 +1,3 @@
+tappie esp MAC adress: 08:B6:1F:29:D6:5C
+
+blank esp MAC: 08:B6:1F:28:96:DC

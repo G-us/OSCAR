@@ -1,0 +1,17 @@
+MAC Address Configuration
+=========================
+
+To configure the system, you need to know the MAC addresses of both ESP32 boards.
+
+How to find MAC addresses:
+1. Upload code to each ESP32
+2. Open Serial Monitor
+3. The MAC address will be printed on startup
+4. Copy the MAC addresses below
+
+Motor Controller ESP32 MAC: XX:XX:XX:XX:XX:XX
+Bridge ESP32 MAC: XX:XX:XX:XX:XX:XX
+
+Then update:
+- In OSCARCONT/src/main.cpp: bridgeMacAddress[] = {...}
+- In OSCARESPNOWTEST/src/main.cpp: motorControllerMAC[] = {...}

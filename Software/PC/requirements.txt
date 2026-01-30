@@ -1,0 +1,4 @@
+# Python requirements for motor control system
+pyserial>=3.5
+inputs>=0.5  # Xbox controller support
+keyboard>=0.13.5  # Keyboard control support
