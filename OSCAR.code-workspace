@@ -7,9 +7,6 @@
 			"path": "Software/ESP/OSCARCAM"
 		},
 		{
-			"path": "Software/ESP/OSCARCONT"
-		},
-		{
 			"name": "OSCARESPNOWTEST",
 			"path": "Software/ESP/OSCARESPNOWTEST"
 		},

@@ -9,8 +9,8 @@ How to find MAC addresses:
 3. The MAC address will be printed on startup
 4. Copy the MAC addresses below
 
-Motor Controller ESP32 MAC: XX:XX:XX:XX:XX:XX
-Bridge ESP32 MAC: XX:XX:XX:XX:XX:XX
+Motor Controller ESP32 MAC: 08:B6:1F:28:96:DC
+Bridge ESP32 MAC: 08:B6:1F:29:D6:5C
 
 Then update:
 - In OSCARCONT/src/main.cpp: bridgeMacAddress[] = {...}

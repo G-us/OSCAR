@@ -29,7 +29,7 @@ except ImportError:
     print("Install with: pip install keyboard")
 
 # ============== CONFIGURATION ==============
-SERIAL_PORT = 'COM3'  # Change to your ESP32 serial port
+SERIAL_PORT = 'COM4'  # Change to your ESP32 serial port
 BAUD_RATE = 115200
 SEND_RATE = 50  # Hz (20ms between packets)
 
@@ -120,17 +120,28 @@ class XboxController:
         elif event.code == 'BTN_EAST' and event.state == 1:
             print("EMERGENCY STOP!")
             self.command.set_emergency_stop()
-    
+
     def update_motors(self):
-        """Convert controller input to motor commands"""
-        # Example mapping (customize for your robot):
-        # Left stick Y -> Motor 1 (forward/backward)
-        # Left stick X -> Motor 2 (left/right)
-        # Right stick Y -> Motor 3
-        
-        self.command.motor1_speed = int(-self.left_stick_y * MAX_SPEED)
-        self.command.motor2_speed = int(self.left_stick_x * MAX_SPEED)
-        self.command.motor3_speed = int(-self.right_stick_y * MAX_SPEED)
+        """Convert controller input to motor commands (differential drive)"""
+        # Differential drive: combine forward/backward with rotation
+        # Left stick Y -> forward/backward (both motors same direction)
+        # Left stick X -> rotation (motors opposite directions)
+
+        forward = -self.left_stick_y  # Forward is positive
+        rotation = self.left_stick_x  # Right is positive
+
+        # Combine forward and rotation
+        left_motor = forward + rotation
+        right_motor = forward - rotation
+
+        # Clamp to motor limits
+        left_motor = max(min(left_motor, 1.0), -1.0)
+        right_motor = max(min(right_motor, 1.0), -1.0)
+
+        # Scale to motor speed range
+        self.command.motor1_speed = int(left_motor * MAX_SPEED)
+        self.command.motor2_speed = int(right_motor * MAX_SPEED)
+        self.command.motor3_speed = 0  # Not used for two-wheeled robot
     
     def run(self):
         """Main gamepad reading loop"""
@@ -169,40 +180,37 @@ class KeyboardController:
         self.motor1 = 0
         self.motor2 = 0
         self.motor3 = 0
-    
+
     def setup_hotkeys(self):
         """Setup keyboard shortcuts"""
         print("\nKeyboard controls:")
-        print("  W/S -> Motor 1 (forward/backward)")
-        print("  A/D -> Motor 2 (left/right)")
-        print("  I/K -> Motor 3 (up/down)")
+        print("  W -> Forward")
+        print("  S -> Backward")
+        print("  A -> Rotate Left")
+        print("  D -> Rotate Right")
         print("  SPACE -> Emergency Stop")
         print("  ESC -> Quit")
-        
-        keyboard.on_press_key('w', lambda _: self.set_motor(1, 75))
-        keyboard.on_press_key('s', lambda _: self.set_motor(1, -75))
-        keyboard.on_press_key('a', lambda _: self.set_motor(2, -75))
-        keyboard.on_press_key('d', lambda _: self.set_motor(2, 75))
-        keyboard.on_press_key('i', lambda _: self.set_motor(3, 75))
-        keyboard.on_press_key('k', lambda _: self.set_motor(3, -75))
+
+        # Forward/Backward
+        keyboard.on_press_key('w', lambda _: self.set_both_motors(75, 75))
+        keyboard.on_press_key('s', lambda _: self.set_both_motors(-75, -75))
+
+        # Rotation
+        keyboard.on_press_key('a', lambda _: self.set_both_motors(-75, 75))
+        keyboard.on_press_key('d', lambda _: self.set_both_motors(75, -75))
+
         keyboard.on_press_key('space', lambda _: self.emergency_stop())
-        
+
         # Release keys to stop
-        keyboard.on_release_key('w', lambda _: self.set_motor(1, 0))
-        keyboard.on_release_key('s', lambda _: self.set_motor(1, 0))
-        keyboard.on_release_key('a', lambda _: self.set_motor(2, 0))
-        keyboard.on_release_key('d', lambda _: self.set_motor(2, 0))
-        keyboard.on_release_key('i', lambda _: self.set_motor(3, 0))
-        keyboard.on_release_key('k', lambda _: self.set_motor(3, 0))
-    
-    def set_motor(self, motor_num, speed):
-        """Set motor speed"""
-        if motor_num == 1:
-            self.command.motor1_speed = speed
-        elif motor_num == 2:
-            self.command.motor2_speed = speed
-        elif motor_num == 3:
-            self.command.motor3_speed = speed
+        keyboard.on_release_key('w', lambda _: self.set_both_motors(0, 0))
+        keyboard.on_release_key('s', lambda _: self.set_both_motors(0, 0))
+        keyboard.on_release_key('a', lambda _: self.set_both_motors(0, 0))
+        keyboard.on_release_key('d', lambda _: self.set_both_motors(0, 0))
+
+    def set_both_motors(self, left, right):
+        """Set both motor speeds for differential drive"""
+        self.command.motor1_speed = left
+        self.command.motor2_speed = right
     
     def emergency_stop(self):
         """Emergency stop"""
