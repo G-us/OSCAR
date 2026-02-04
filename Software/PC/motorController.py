@@ -13,6 +13,7 @@ import threading
 # Try to import Xbox controller support
 try:
     from inputs import get_gamepad
+
     GAMEPAD_AVAILABLE = True
 except ImportError:
     GAMEPAD_AVAILABLE = False
@@ -22,6 +23,7 @@ except ImportError:
 # Try to import keyboard support
 try:
     import keyboard
+
     KEYBOARD_AVAILABLE = True
 except ImportError:
     KEYBOARD_AVAILABLE = False
@@ -40,6 +42,7 @@ MIN_SPEED = -100
 # Deadzone for analog sticks (prevents drift)
 DEADZONE = 0.15
 
+
 # ============== MOTOR COMMAND STRUCTURE ==============
 # Must match ESP32 structure: int8_t, int8_t, int8_t, uint8_t
 class MotorCommand:
@@ -48,30 +51,31 @@ class MotorCommand:
         self.motor2_speed = 0
         self.motor3_speed = 0
         self.flags = 0x02  # Bit 1 = enable motors by default
-    
+
     def pack(self):
         """Pack command into bytes for serial transmission"""
         # Format: 3 signed bytes + 1 unsigned byte
-        return struct.pack('bbbB', 
-                          self.motor1_speed, 
-                          self.motor2_speed, 
-                          self.motor3_speed, 
-                          self.flags)
-    
+        return struct.pack('bbbB',
+                           self.motor1_speed,
+                           self.motor2_speed,
+                           self.motor3_speed,
+                           self.flags)
+
     def set_emergency_stop(self):
         """Set emergency stop flag"""
         self.flags |= 0x01
         self.motor1_speed = 0
         self.motor2_speed = 0
         self.motor3_speed = 0
-    
+
     def enable_motors(self):
         """Enable motors"""
         self.flags |= 0x02
-    
+
     def disable_motors(self):
         """Disable motors"""
         self.flags &= ~0x02
+
 
 # ============== XBOX CONTROLLER HANDLER ==============
 class XboxController:
@@ -79,7 +83,7 @@ class XboxController:
         self.command = command
         self.running = True
         self.thread = None
-        
+
         # Controller state
         self.left_stick_x = 0.0
         self.left_stick_y = 0.0
@@ -87,7 +91,7 @@ class XboxController:
         self.right_stick_y = 0.0
         self.left_trigger = 0.0
         self.right_trigger = 0.0
-    
+
     def apply_deadzone(self, value):
         """Apply deadzone to analog input"""
         if abs(value) < DEADZONE:
@@ -95,7 +99,7 @@ class XboxController:
         # Rescale to make deadzone smooth
         sign = 1 if value > 0 else -1
         return sign * (abs(value) - DEADZONE) / (1.0 - DEADZONE)
-    
+
     def process_event(self, event):
         """Process gamepad events"""
         # Left stick (Motor 1 & 2)
@@ -103,19 +107,19 @@ class XboxController:
             self.left_stick_x = self.apply_deadzone(event.state / 32768.0)
         elif event.code == 'ABS_Y':
             self.left_stick_y = self.apply_deadzone(event.state / 32768.0)
-        
+
         # Right stick (Motor 3)
         elif event.code == 'ABS_RX':
             self.right_stick_x = self.apply_deadzone(event.state / 32768.0)
         elif event.code == 'ABS_RY':
             self.right_stick_y = self.apply_deadzone(event.state / 32768.0)
-        
+
         # Triggers
         elif event.code == 'ABS_Z':  # Left trigger
             self.left_trigger = event.state / 255.0
         elif event.code == 'ABS_RZ':  # Right trigger
             self.right_trigger = event.state / 255.0
-        
+
         # Emergency stop on button press (e.g., B button)
         elif event.code == 'BTN_EAST' and event.state == 1:
             print("EMERGENCY STOP!")
@@ -142,7 +146,7 @@ class XboxController:
         self.command.motor1_speed = int(left_motor * MAX_SPEED)
         self.command.motor2_speed = int(right_motor * MAX_SPEED)
         self.command.motor3_speed = 0  # Not used for two-wheeled robot
-    
+
     def run(self):
         """Main gamepad reading loop"""
         print("Xbox controller active. Press Ctrl+C to stop.")
@@ -151,7 +155,7 @@ class XboxController:
         print("  Left Stick X  -> Motor 2")
         print("  Right Stick Y -> Motor 3")
         print("  B Button      -> Emergency Stop")
-        
+
         try:
             while self.running:
                 events = get_gamepad()
@@ -160,22 +164,23 @@ class XboxController:
                 self.update_motors()
         except Exception as e:
             print(f"Controller error: {e}")
-    
+
     def start(self):
         """Start controller thread"""
-        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread = threading.Thread(target = self.run, daemon = True)
         self.thread.start()
-    
+
     def stop(self):
         """Stop controller thread"""
         self.running = False
+
 
 # ============== KEYBOARD CONTROLLER ==============
 class KeyboardController:
     def __init__(self, command):
         self.command = command
         self.running = True
-        
+
         # Speed increments
         self.motor1 = 0
         self.motor2 = 0
@@ -211,11 +216,12 @@ class KeyboardController:
         """Set both motor speeds for differential drive"""
         self.command.motor1_speed = left
         self.command.motor2_speed = right
-    
+
     def emergency_stop(self):
         """Emergency stop"""
         print("EMERGENCY STOP!")
         self.command.set_emergency_stop()
+
 
 # ============== MAIN CONTROLLER ==============
 class MotorControllerApp:
@@ -223,28 +229,28 @@ class MotorControllerApp:
         self.command = MotorCommand()
         self.serial_conn = None
         self.running = True
-        
+
         # Input handlers
         self.xbox_controller = None
         self.keyboard_controller = None
-    
+
     def connect_serial(self):
         """Connect to ESP32 serial bridge"""
         print(f"Connecting to {SERIAL_PORT}...")
         try:
-            self.serial_conn = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=0.1)
+            self.serial_conn = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout = 0.1)
             time.sleep(2)  # Wait for ESP32 to reset
             print("Connected!")
-            
+
             # Clear any startup messages
             while self.serial_conn.in_waiting:
-                print(self.serial_conn.readline().decode('utf-8', errors='ignore').strip())
-            
+                print(self.serial_conn.readline().decode('utf-8', errors = 'ignore').strip())
+
             return True
         except Exception as e:
             print(f"Error connecting: {e}")
             return False
-    
+
     def send_command(self):
         """Send motor command to ESP32"""
         if self.serial_conn and self.serial_conn.is_open:
@@ -254,19 +260,19 @@ class MotorControllerApp:
                 self.serial_conn.flush()
             except Exception as e:
                 print(f"Send error: {e}")
-    
+
     def run(self):
         """Main control loop"""
         if not self.connect_serial():
             return
-        
+
         # Choose input method
         if GAMEPAD_AVAILABLE:
             print("\nInput method:")
             print("1. Xbox Controller")
             print("2. Keyboard")
             choice = input("Select (1 or 2): ").strip()
-            
+
             if choice == '1':
                 self.xbox_controller = XboxController(self.command)
                 self.xbox_controller.start()
@@ -279,25 +285,25 @@ class MotorControllerApp:
         else:
             print("No input methods available!")
             return
-        
+
         print(f"\nSending commands at {SEND_RATE}Hz. Press Ctrl+C to stop.")
-        
+
         try:
             interval = 1.0 / SEND_RATE
             last_send = time.time()
-            
+
             while self.running:
                 current_time = time.time()
-                
+
                 if current_time - last_send >= interval:
                     self.send_command()
                     last_send = current_time
                     # Optional: Print status
-                    print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d}", end='\r')
+                    print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d}", end = '\r')
                     print(self.serial_conn.readline())
-                
+
                 time.sleep(0.001)  # Small sleep to prevent CPU hogging
-                
+
         except KeyboardInterrupt:
             print("\nStopping...")
         finally:
@@ -305,14 +311,15 @@ class MotorControllerApp:
             self.command.set_emergency_stop()
             self.send_command()
             time.sleep(0.1)
-            
+
             if self.xbox_controller:
                 self.xbox_controller.stop()
-            
+
             if self.serial_conn:
                 self.serial_conn.close()
-            
+
             print("Disconnected.")
+
 
 # ============== ENTRY POINT ==============
 if __name__ == "__main__":

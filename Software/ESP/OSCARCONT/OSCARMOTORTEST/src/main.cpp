@@ -33,7 +33,7 @@
 #define PWM_CHANNEL_3 2
 
 // Safety Configuration
-#define WATCHDOG_TIMEOUT 500 // Stop motors if no command for 500ms
+#define WATCHDOG_TIMEOUT 100 // Stop motors if no command for 100ms
 #define ACCEL_LIMIT 5        // Max speed change per cycle (smoother control)
 
 // ============== ESP-NOW CONFIGURATION ==============
@@ -90,6 +90,17 @@ void loop()
     }
   }
 
+  // If motors disabled, immediately clear target and actual speeds
+  if (!motorsEnabled)
+  {
+    targetCommand.motor1_speed = 0;
+    targetCommand.motor2_speed = 0;
+    targetCommand.motor3_speed = 0;
+    actualSpeed[0] = 0;
+    actualSpeed[1] = 0;
+    actualSpeed[2] = 0;
+  }
+
   // Smooth speed ramping (prevents jerky movements)
   for (int i = 0; i < 3; i++)
   {
@@ -102,13 +113,15 @@ void loop()
     if (actualSpeed[i] < targetSpeed)
     {
       int tmp = actualSpeed[i] + ACCEL_LIMIT;
-      if (tmp > targetSpeed) tmp = targetSpeed;
+      if (tmp > targetSpeed)
+        tmp = targetSpeed;
       actualSpeed[i] = (int8_t)tmp;
     }
     else if (actualSpeed[i] > targetSpeed)
     {
       int tmp = actualSpeed[i] - ACCEL_LIMIT;
-      if (tmp < targetSpeed) tmp = targetSpeed;
+      if (tmp < targetSpeed)
+        tmp = targetSpeed;
       actualSpeed[i] = (int8_t)tmp;
     }
   }
@@ -261,11 +274,8 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len)
       return;
     }
 
-    // Check enable flag
-    if (targetCommand.flags & 0x02)
-    {
-      motorsEnabled = true;
-    }
+    // Set motor enable state based on flag
+    motorsEnabled = (targetCommand.flags & 0x02) != 0;
 
     // Debug output (optional - comment out for performance)
     Serial.printf("CMD: M1=%d M2=%d M3=%d Flags=0x%02X\n",
