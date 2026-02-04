@@ -29,7 +29,7 @@ except ImportError:
     print("Install with: pip install keyboard")
 
 # ============== CONFIGURATION ==============
-SERIAL_PORT = 'COM4'  # Change to your ESP32 serial port
+SERIAL_PORT = 'COM10'  # Change to your ESP32 serial port
 BAUD_RATE = 115200
 SEND_RATE = 50  # Hz (20ms between packets)
 
@@ -192,12 +192,12 @@ class KeyboardController:
         print("  ESC -> Quit")
 
         # Forward/Backward
-        keyboard.on_press_key('w', lambda _: self.set_both_motors(75, 75))
-        keyboard.on_press_key('s', lambda _: self.set_both_motors(-75, -75))
+        keyboard.on_press_key('w', lambda _: self.set_both_motors(75, -75))
+        keyboard.on_press_key('s', lambda _: self.set_both_motors(-75, 75))
 
         # Rotation
-        keyboard.on_press_key('a', lambda _: self.set_both_motors(-75, 75))
-        keyboard.on_press_key('d', lambda _: self.set_both_motors(75, -75))
+        keyboard.on_press_key('a', lambda _: self.set_both_motors(-75, -75))
+        keyboard.on_press_key('d', lambda _: self.set_both_motors(75, 75))
 
         keyboard.on_press_key('space', lambda _: self.emergency_stop())
 
@@ -292,9 +292,9 @@ class MotorControllerApp:
                 if current_time - last_send >= interval:
                     self.send_command()
                     last_send = current_time
-                    
                     # Optional: Print status
-                    # print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d} M3:{self.command.motor3_speed:4d}", end='\r')
+                    print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d}", end='\r')
+                    print(self.serial_conn.readline())
                 
                 time.sleep(0.001)  # Small sleep to prevent CPU hogging
                 

@@ -126,10 +126,7 @@ void processSerialData()
       Serial.println("ERROR: ESP-NOW send failed");
     }
     // Optional: Echo for debugging (comment out for production)
-    // Serial.printf("Forwarded: M1=%d M2=%d M3=%d\n",
-    //               outgoingCommand.motor1_speed,
-    //               outgoingCommand.motor2_speed,
-    //               outgoingCommand.motor3_speed);
+    Serial.printf("Forwarded: M1=%d M2=%d M3=%d\n", outgoingCommand.motor1_speed, outgoingCommand.motor2_speed, outgoingCommand.motor3_speed);
   }
 }
 
