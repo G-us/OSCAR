@@ -10,6 +10,8 @@ import time
 import sys
 import threading
 
+from sympy import false
+
 # Try to import Xbox controller support
 try:
     from inputs import get_gamepad
@@ -180,11 +182,13 @@ class KeyboardController:
     def __init__(self, command):
         self.command = command
         self.running = True
+        self.rotateSpeed = 75
 
         # Speed increments
         self.motor1 = 0
         self.motor2 = 0
         self.motor3 = 0
+        self.slowRotate = False
 
     def setup_hotkeys(self):
         """Setup keyboard shortcuts"""
@@ -197,12 +201,14 @@ class KeyboardController:
         print("  ESC -> Quit")
 
         # Forward/Backward
-        keyboard.on_press_key('w', lambda _: self.set_both_motors(75, -75))
-        keyboard.on_press_key('s', lambda _: self.set_both_motors(-75, 75))
+        keyboard.on_press_key('w', lambda _: self.set_both_motors(-75, -75))
+        keyboard.on_press_key('s', lambda _: self.set_both_motors(75, 75))
 
         # Rotation
-        keyboard.on_press_key('a', lambda _: self.set_both_motors(-75, -75))
-        keyboard.on_press_key('d', lambda _: self.set_both_motors(75, 75))
+        keyboard.on_press_key('a', lambda _: self.set_both_motors(-self.rotateSpeed, self.rotateSpeed))
+        keyboard.on_press_key('d', lambda _: self.set_both_motors(self.rotateSpeed, -self.rotateSpeed))
+        keyboard.on_press_key('shift', lambda _: self.setSlowRotate(True))
+        keyboard.on_release_key('shift', lambda _: self.setSlowRotate(False))
 
         keyboard.on_press_key('space', lambda _: self.emergency_stop())
 
@@ -221,6 +227,16 @@ class KeyboardController:
         """Emergency stop"""
         print("EMERGENCY STOP!")
         self.command.set_emergency_stop()
+
+    def setSlowRotate(self, value):
+        """Set slow rotation mode"""
+        self.slowRotate = value
+        if self.slowRotate:
+            print("Slow rotation enabled")
+            self.rotateSpeed = 40
+        else:
+            print("Slow rotation disabled")
+            self.rotateSpeed = 75
 
 
 # ============== MAIN CONTROLLER ==============
@@ -296,11 +312,15 @@ class MotorControllerApp:
                 current_time = time.time()
 
                 if current_time - last_send >= interval:
-                    self.send_command()
-                    last_send = current_time
-                    # Optional: Print status
-                    print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d}", end = '\r')
-                    print(self.serial_conn.readline())
+                    serialResponse = self.serial_conn.readline().decode('utf-8', errors = 'ignore').strip()
+                    print(serialResponse)
+                    if not (serialResponse == "ERROR: ESP-NOW send failed"):
+                        self.send_command()
+                        last_send = current_time
+                        # Optional: Print status
+                        print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d}", end = '\r')
+                    else:
+                        print("ESP-NOW send failed")
 
                 time.sleep(0.001)  # Small sleep to prevent CPU hogging
 

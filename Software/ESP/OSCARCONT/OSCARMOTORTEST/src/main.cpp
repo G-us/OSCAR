@@ -36,6 +36,11 @@
 #define WATCHDOG_TIMEOUT 100 // Stop motors if no command for 100ms
 #define ACCEL_LIMIT 5        // Max speed change per cycle (smoother control)
 
+// Resilience Configuration
+#define ESPNOW_INIT_RETRIES 5
+#define ESPNOW_RETRY_DELAY_MS 250
+#define PEER_ADD_RETRIES 3
+
 // ============== ESP-NOW CONFIGURATION ==============
 // MAC address of the bridge ESP32 (update with your actual MAC)
 uint8_t bridgeMacAddress[] = {0x08, 0xB6, 0x1F, 0x29, 0xD6, 0x5C};
@@ -55,11 +60,14 @@ motor_command targetCommand = {0, 0, 0, 0};
 // ============== STATE VARIABLES ==============
 unsigned long lastCommandTime = 0;
 int8_t actualSpeed[3] = {0, 0, 0}; // Current motor speeds after ramping
-bool motorsEnabled = true;
+bool motorsEnabled = false;        // Fail-safe: start disabled until enable flag received
+bool espNowReady = false;
 
 // ============== FUNCTION PROTOTYPES ==============
 void setupMotors();
 void setupESPNow();
+bool initESPNowWithRetry();
+bool addPeerWithRetry(const uint8_t *peerMac);
 void updateMotors();
 void setMotorSpeed(uint8_t motorNum, int8_t speed);
 void emergencyStop();
@@ -79,6 +87,20 @@ void setup()
 
 void loop()
 {
+  // If ESP-NOW not ready, keep motors stopped and retry periodically
+  if (!espNowReady)
+  {
+    emergencyStop();
+    static unsigned long lastRetry = 0;
+    if (millis() - lastRetry > 2000)
+    {
+      lastRetry = millis();
+      setupESPNow();
+    }
+    delay(20);
+    return;
+  }
+
   // Watchdog: Stop motors if no command received recently
   if (millis() - lastCommandTime > WATCHDOG_TIMEOUT)
   {
@@ -178,29 +200,61 @@ void setupESPNow()
   }
   Serial.println();
 
-  // Initialize ESP-NOW
-  if (esp_now_init() != ESP_OK)
+  if (!initESPNowWithRetry())
   {
-    Serial.println("ERROR: ESP-NOW initialization failed!");
+    Serial.println("ERROR: ESP-NOW initialization failed after retries!");
+    espNowReady = false;
     return;
   }
 
   // Register receive callback
   esp_now_register_recv_cb(onDataReceived);
 
-  // Add bridge as peer
-  esp_now_peer_info_t peerInfo = {};
-  memcpy(peerInfo.peer_addr, bridgeMacAddress, 6);
-  peerInfo.channel = 0;
-  peerInfo.encrypt = false;
-
-  if (esp_now_add_peer(&peerInfo) != ESP_OK)
+  if (!addPeerWithRetry(bridgeMacAddress))
   {
-    Serial.println("ERROR: Failed to add peer");
+    Serial.println("ERROR: Failed to add peer after retries");
+    espNowReady = false;
     return;
   }
 
+  espNowReady = true;
   Serial.println("ESP-NOW initialized");
+}
+
+bool initESPNowWithRetry()
+{
+  for (int i = 0; i < ESPNOW_INIT_RETRIES; i++)
+  {
+    if (esp_now_init() == ESP_OK)
+    {
+      return true;
+    }
+    Serial.printf("WARN: ESP-NOW init failed (attempt %d)\n", i + 1);
+    delay(ESPNOW_RETRY_DELAY_MS);
+  }
+  return false;
+}
+
+bool addPeerWithRetry(const uint8_t *peerMac)
+{
+  if (peerMac == nullptr)
+    return false;
+
+  esp_now_peer_info_t peerInfo = {};
+  memcpy(peerInfo.peer_addr, peerMac, 6);
+  peerInfo.channel = 0;
+  peerInfo.encrypt = false;
+
+  for (int i = 0; i < PEER_ADD_RETRIES; i++)
+  {
+    if (esp_now_add_peer(&peerInfo) == ESP_OK)
+    {
+      return true;
+    }
+    Serial.printf("WARN: Add peer failed (attempt %d)\n", i + 1);
+    delay(ESPNOW_RETRY_DELAY_MS);
+  }
+  return false;
 }
 
 void updateMotors()
@@ -260,32 +314,31 @@ void emergencyStop()
 // ============== ESP-NOW CALLBACK ==============
 void onDataReceived(const uint8_t *mac, const uint8_t *data, int len)
 {
-  if (len == sizeof(motor_command))
+  if (data == nullptr || len != sizeof(motor_command))
   {
-    memcpy(&targetCommand, data, sizeof(motor_command));
-    lastCommandTime = millis();
-
-    // Check emergency stop flag
-    if (targetCommand.flags & 0x01)
-    {
-      Serial.println("EMERGENCY STOP RECEIVED");
-      emergencyStop();
-      motorsEnabled = false;
-      return;
-    }
-
-    // Set motor enable state based on flag
-    motorsEnabled = (targetCommand.flags & 0x02) != 0;
-
-    // Debug output (optional - comment out for performance)
-    Serial.printf("CMD: M1=%d M2=%d M3=%d Flags=0x%02X\n",
-                  targetCommand.motor1_speed,
-                  targetCommand.motor2_speed,
-                  targetCommand.motor3_speed,
-                  targetCommand.flags);
+    Serial.printf("WARNING: Invalid packet (len=%d)\n", len);
+    return;
   }
-  else
+
+  memcpy(&targetCommand, data, sizeof(motor_command));
+  lastCommandTime = millis();
+
+  // Check emergency stop flag
+  if (targetCommand.flags & 0x01)
   {
-    Serial.printf("WARNING: Received packet of wrong size: %d bytes\n", len);
+    Serial.println("EMERGENCY STOP RECEIVED");
+    emergencyStop();
+    motorsEnabled = false;
+    return;
   }
+
+  // Set motor enable state based on flag
+  motorsEnabled = (targetCommand.flags & 0x02) != 0;
+
+  // Debug output (optional - comment out for performance)
+  Serial.printf("CMD: M1=%d M2=%d M3=%d Flags=0x%02X\n",
+                targetCommand.motor1_speed,
+                targetCommand.motor2_speed,
+                targetCommand.motor3_speed,
+                targetCommand.flags);
 }
