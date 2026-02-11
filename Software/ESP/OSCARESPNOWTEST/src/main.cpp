@@ -19,12 +19,12 @@ uint8_t motorControllerMAC[] = {0x08, 0xB6, 0x1F, 0x28, 0x96, 0xDC};
 #define SERIAL_PACKET_TIMEOUT_MS 20
 
 // Message structure - must match motor controller and Python
-typedef struct motor_command
+typedef struct __attribute__((packed)) motor_command
 {
-  int8_t motor1_speed; // -100 to +100
-  int8_t motor2_speed; // -100 to +100
-  int8_t motor3_speed; // -100 to +100
-  uint8_t flags;       // Control flags
+  int8_t motor1_speed;   // -100 to +100
+  int8_t motor2_speed;   // -100 to +100
+  int16_t stepper_target; // Target position (scaled by controller)
+  uint8_t flags;         // Control flags
 } motor_command;
 
 // ============== STATE VARIABLES ==============
@@ -186,7 +186,10 @@ void processSerialData()
       Serial.println("ERROR: ESP-NOW send failed");
     }
     // Optional: Echo for debugging (comment out for production)
-    Serial.printf("Forwarded: M1=%d M2=%d M3=%d\n", outgoingCommand.motor1_speed, outgoingCommand.motor2_speed, outgoingCommand.motor3_speed);
+    Serial.printf("Forwarded: M1=%d M2=%d Stepper=%d\n",
+                  outgoingCommand.motor1_speed,
+                  outgoingCommand.motor2_speed,
+                  outgoingCommand.stepper_target);
   }
 }
 

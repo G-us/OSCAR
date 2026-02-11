@@ -44,23 +44,27 @@ MIN_SPEED = -100
 # Deadzone for analog sticks (prevents drift)
 DEADZONE = 0.15
 
+# Stepper target tuning (command units, scaled by firmware by 10x)
+STEPPER_TARGET_RATE = 8
+STEPPER_TARGET_STEP = 5
+
 
 # ============== MOTOR COMMAND STRUCTURE ==============
-# Must match ESP32 structure: int8_t, int8_t, int8_t, uint8_t
+# Must match ESP32 structure: int8_t, int8_t, int16_t, uint8_t
 class MotorCommand:
     def __init__(self):
         self.motor1_speed = 0
         self.motor2_speed = 0
-        self.motor3_speed = 0
+        self.stepper_target = 0
         self.flags = 0x02  # Bit 1 = enable motors by default
 
     def pack(self):
         """Pack command into bytes for serial transmission"""
-        # Format: 3 signed bytes + 1 unsigned byte
-        return struct.pack('bbbB',
+        # Format: 2 signed bytes + 1 signed short + 1 unsigned byte
+        return struct.pack('<bbhB',
                            self.motor1_speed,
                            self.motor2_speed,
-                           self.motor3_speed,
+                   self.stepper_target,
                            self.flags)
 
     def set_emergency_stop(self):
@@ -68,7 +72,14 @@ class MotorCommand:
         self.flags |= 0x01
         self.motor1_speed = 0
         self.motor2_speed = 0
-        self.motor3_speed = 0
+        self.stepper_target = 0
+
+    def clamp_stepper_target(self):
+        """Clamp target to int16 range to match packet format"""
+        if self.stepper_target > 32767:
+            self.stepper_target = 32767
+        elif self.stepper_target < -32768:
+            self.stepper_target = -32768
 
     def enable_motors(self):
         """Enable motors"""
@@ -110,7 +121,7 @@ class XboxController:
         elif event.code == 'ABS_Y':
             self.left_stick_y = self.apply_deadzone(event.state / 32768.0)
 
-        # Right stick (Motor 3)
+        # Right stick (Stepper target)
         elif event.code == 'ABS_RX':
             self.right_stick_x = self.apply_deadzone(event.state / 32768.0)
         elif event.code == 'ABS_RY':
@@ -147,7 +158,12 @@ class XboxController:
         # Scale to motor speed range
         self.command.motor1_speed = int(left_motor * MAX_SPEED)
         self.command.motor2_speed = int(right_motor * MAX_SPEED)
-        self.command.motor3_speed = 0  # Not used for two-wheeled robot
+
+        # Adjust stepper target with right stick Y (position increments)
+        if abs(self.right_stick_y) > 0.05:
+            delta_units = int(self.right_stick_y * STEPPER_TARGET_RATE)
+            self.command.stepper_target = self.command.stepper_target + delta_units
+            self.command.clamp_stepper_target()
 
     def run(self):
         """Main gamepad reading loop"""
@@ -155,7 +171,7 @@ class XboxController:
         print("Controls:")
         print("  Left Stick Y  -> Motor 1")
         print("  Left Stick X  -> Motor 2")
-        print("  Right Stick Y -> Motor 3")
+        print("  Right Stick Y -> Stepper Target")
         print("  B Button      -> Emergency Stop")
 
         try:
@@ -187,7 +203,7 @@ class KeyboardController:
         # Speed increments
         self.motor1 = 0
         self.motor2 = 0
-        self.motor3 = 0
+        self.stepper_step = STEPPER_TARGET_STEP
         self.slowRotate = False
 
     def setup_hotkeys(self):
@@ -197,6 +213,8 @@ class KeyboardController:
         print("  S -> Backward")
         print("  A -> Rotate Left")
         print("  D -> Rotate Right")
+        print("  R -> Stepper +")
+        print("  F -> Stepper -")
         print("  SPACE -> Emergency Stop")
         print("  ESC -> Quit")
 
@@ -211,6 +229,10 @@ class KeyboardController:
         keyboard.on_release_key('shift', lambda _: self.setSlowRotate(False))
 
         keyboard.on_press_key('space', lambda _: self.emergency_stop())
+
+        # Stepper target increments
+        keyboard.on_press_key('r', lambda _: self.adjust_stepper(self.stepper_step))
+        keyboard.on_press_key('f', lambda _: self.adjust_stepper(-self.stepper_step))
 
         # Release keys to stop
         keyboard.on_release_key('w', lambda _: self.set_both_motors(0, 0))
@@ -227,6 +249,11 @@ class KeyboardController:
         """Emergency stop"""
         print("EMERGENCY STOP!")
         self.command.set_emergency_stop()
+
+    def adjust_stepper(self, delta_units):
+        """Adjust stepper target position in command units"""
+        self.command.stepper_target = self.command.stepper_target + delta_units
+        self.command.clamp_stepper_target()
 
     def setSlowRotate(self, value):
         """Set slow rotation mode"""
@@ -318,7 +345,12 @@ class MotorControllerApp:
                         self.send_command()
                         last_send = current_time
                         # Optional: Print status
-                        print(f"M1:{self.command.motor1_speed:4d} M2:{self.command.motor2_speed:4d}", end = '\r')
+                        print(
+                            f"M1:{self.command.motor1_speed:4d} "
+                            f"M2:{self.command.motor2_speed:4d} "
+                            f"Step:{self.command.stepper_target:6d}",
+                            end = '\r'
+                        )
                     else:
                         print("ESP-NOW send failed")
 

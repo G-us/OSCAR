@@ -1,15 +1,16 @@
 /*
  * ESP32 Motor Controller with ESP-NOW
- * Controls 3 DC motors using L293N drivers
+ * Controls 2 DC motors using L293N drivers and 1 stepper via L298N
  * Receives commands wirelessly via ESP-NOW
  */
 
 #include <Arduino.h>
 #include <esp_now.h>
 #include <WiFi.h>
+#include <AccelStepper.h>
 
 // ============== MOTOR CONFIGURATION ==============
-// L293N Pin Definitions for 3 Motors
+// L293N Pin Definitions for 2 DC Motors
 // Motor 1
 #define MOTOR1_IN1 13
 #define MOTOR1_IN2 12
@@ -20,17 +21,20 @@
 #define MOTOR2_IN2 26
 #define MOTOR2_EN 25
 
-// Motor 3
-#define MOTOR3_IN1 33
-#define MOTOR3_IN2 32
-#define MOTOR3_EN 15
+// Stepper Configuration (L298N 4-wire driver)
+#define STEPPER_IN1 23
+#define STEPPER_IN2 22
+#define STEPPER_IN3 19
+#define STEPPER_IN4 18
+#define STEPPER_MAX_SPEED 800.0f
+#define STEPPER_ACCEL 600.0f
+#define STEPPER_COMMAND_SCALE 10
 
 // PWM Configuration
 #define PWM_FREQ 1000    // 1kHz PWM frequency
 #define PWM_RESOLUTION 8 // 8-bit resolution (0-255)
 #define PWM_CHANNEL_1 0
 #define PWM_CHANNEL_2 1
-#define PWM_CHANNEL_3 2
 
 // Safety Configuration
 #define WATCHDOG_TIMEOUT 100 // Stop motors if no command for 100ms
@@ -46,22 +50,23 @@
 uint8_t bridgeMacAddress[] = {0x08, 0xB6, 0x1F, 0x29, 0xD6, 0x5C};
 
 // Message structure - must match laptop/bridge
-typedef struct motor_command
+typedef struct __attribute__((packed)) motor_command
 {
   int8_t motor1_speed; // -100 to +100 (percentage)
   int8_t motor2_speed; // -100 to +100 (percentage)
-  int8_t motor3_speed; // -100 to +100 (percentage)
+  int16_t stepper_target; // Target position (scaled by STEPPER_COMMAND_SCALE)
   uint8_t flags;       // Bit 0: emergency stop, Bit 1: enable
 } motor_command;
-
 motor_command currentCommand = {0, 0, 0, 0};
 motor_command targetCommand = {0, 0, 0, 0};
 
 // ============== STATE VARIABLES ==============
 unsigned long lastCommandTime = 0;
-int8_t actualSpeed[3] = {0, 0, 0}; // Current motor speeds after ramping
+int8_t actualSpeed[2] = {0, 0}; // Current motor speeds after ramping
 bool motorsEnabled = false;        // Fail-safe: start disabled until enable flag received
 bool espNowReady = false;
+
+AccelStepper stepper(AccelStepper::FULL4WIRE, STEPPER_IN1, STEPPER_IN3, STEPPER_IN2, STEPPER_IN4);
 
 // ============== FUNCTION PROTOTYPES ==============
 void setupMotors();
@@ -117,20 +122,17 @@ void loop()
   {
     targetCommand.motor1_speed = 0;
     targetCommand.motor2_speed = 0;
-    targetCommand.motor3_speed = 0;
     actualSpeed[0] = 0;
     actualSpeed[1] = 0;
-    actualSpeed[2] = 0;
+    stepper.moveTo(stepper.currentPosition());
   }
 
   // Smooth speed ramping (prevents jerky movements)
-  for (int i = 0; i < 3; i++)
+  for (int i = 0; i < 2; i++)
   {
     int8_t targetSpeed = motorsEnabled ? targetCommand.motor1_speed : 0;
     if (i == 1)
       targetSpeed = motorsEnabled ? targetCommand.motor2_speed : 0;
-    if (i == 2)
-      targetSpeed = motorsEnabled ? targetCommand.motor3_speed : 0;
 
     if (actualSpeed[i] < targetSpeed)
     {
@@ -151,6 +153,9 @@ void loop()
   // Update motor outputs
   updateMotors();
 
+  // Run stepper regardless to allow decel to complete
+  stepper.run();
+
   delay(20); // 50Hz control loop
 }
 
@@ -164,17 +169,17 @@ void setupMotors()
   pinMode(MOTOR1_IN2, OUTPUT);
   pinMode(MOTOR2_IN1, OUTPUT);
   pinMode(MOTOR2_IN2, OUTPUT);
-  pinMode(MOTOR3_IN1, OUTPUT);
-  pinMode(MOTOR3_IN2, OUTPUT);
 
   // Setup PWM channels
   ledcSetup(PWM_CHANNEL_1, PWM_FREQ, PWM_RESOLUTION);
   ledcSetup(PWM_CHANNEL_2, PWM_FREQ, PWM_RESOLUTION);
-  ledcSetup(PWM_CHANNEL_3, PWM_FREQ, PWM_RESOLUTION);
 
   ledcAttachPin(MOTOR1_EN, PWM_CHANNEL_1);
   ledcAttachPin(MOTOR2_EN, PWM_CHANNEL_2);
-  ledcAttachPin(MOTOR3_EN, PWM_CHANNEL_3);
+
+  stepper.setMaxSpeed(STEPPER_MAX_SPEED);
+  stepper.setAcceleration(STEPPER_ACCEL);
+  stepper.setCurrentPosition(0);
 
   // Start with motors stopped
   emergencyStop();
@@ -261,7 +266,6 @@ void updateMotors()
 {
   setMotorSpeed(1, actualSpeed[0]);
   setMotorSpeed(2, actualSpeed[1]);
-  setMotorSpeed(3, actualSpeed[2]);
 }
 
 void setMotorSpeed(uint8_t motorNum, int8_t speed)
@@ -284,11 +288,6 @@ void setMotorSpeed(uint8_t motorNum, int8_t speed)
     digitalWrite(MOTOR2_IN2, forward ? LOW : HIGH);
     ledcWrite(PWM_CHANNEL_2, pwmValue);
     break;
-  case 3:
-    digitalWrite(MOTOR3_IN1, forward ? HIGH : LOW);
-    digitalWrite(MOTOR3_IN2, forward ? LOW : HIGH);
-    ledcWrite(PWM_CHANNEL_3, pwmValue);
-    break;
   }
 }
 
@@ -297,18 +296,19 @@ void emergencyStop()
   // Stop all motors immediately
   ledcWrite(PWM_CHANNEL_1, 0);
   ledcWrite(PWM_CHANNEL_2, 0);
-  ledcWrite(PWM_CHANNEL_3, 0);
+
+  stepper.stop();
+  stepper.moveTo(stepper.currentPosition());
   digitalWrite(MOTOR1_IN1, LOW);
   digitalWrite(MOTOR1_IN2, LOW);
   digitalWrite(MOTOR2_IN1, LOW);
   digitalWrite(MOTOR2_IN2, LOW);
-  digitalWrite(MOTOR3_IN1, LOW);
-  digitalWrite(MOTOR3_IN2, LOW);
 
-  actualSpeed[0] = actualSpeed[1] = actualSpeed[2] = 0;
+  actualSpeed[0] = 0;
+  actualSpeed[1] = 0;
   targetCommand.motor1_speed = 0;
   targetCommand.motor2_speed = 0;
-  targetCommand.motor3_speed = 0;
+  targetCommand.stepper_target = 0;
 }
 
 // ============== ESP-NOW CALLBACK ==============
@@ -335,10 +335,16 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len)
   // Set motor enable state based on flag
   motorsEnabled = (targetCommand.flags & 0x02) != 0;
 
+  if (motorsEnabled)
+  {
+    long targetSteps = (long)targetCommand.stepper_target * STEPPER_COMMAND_SCALE;
+    stepper.moveTo(targetSteps);
+  }
+
   // Debug output (optional - comment out for performance)
-  Serial.printf("CMD: M1=%d M2=%d M3=%d Flags=0x%02X\n",
+  Serial.printf("CMD: M1=%d M2=%d Stepper=%ld Flags=0x%02X\n",
                 targetCommand.motor1_speed,
                 targetCommand.motor2_speed,
-                targetCommand.motor3_speed,
+                (long)targetCommand.stepper_target * STEPPER_COMMAND_SCALE,
                 targetCommand.flags);
 }
