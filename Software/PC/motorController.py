@@ -33,7 +33,7 @@ except ImportError:
     print("Install with: pip install keyboard")
 
 # ============== CONFIGURATION ==============
-SERIAL_PORT = 'COM10'  # Change to your ESP32 serial port
+SERIAL_PORT = 'COM4'  # Change to your ESP32 serial port
 BAUD_RATE = 115200
 SEND_RATE = 50  # Hz (20ms between packets)
 
@@ -73,6 +73,9 @@ class MotorCommand:
         self.motor1_speed = 0
         self.motor2_speed = 0
         self.stepper_target = 0
+
+    def cancel_emergency_stop(self):
+        self.flags = 0x02
 
     def clamp_stepper_target(self):
         """Clamp target to int16 range to match packet format"""
@@ -229,6 +232,7 @@ class KeyboardController:
         keyboard.on_release_key('shift', lambda _: self.setSlowRotate(False))
 
         keyboard.on_press_key('space', lambda _: self.emergency_stop())
+        keyboard.on_press_key('z', lambda _: self.cancel_emergency_stop())
 
         # Stepper target increments
         keyboard.on_press_key('r', lambda _: self.adjust_stepper(self.stepper_step))
@@ -249,6 +253,10 @@ class KeyboardController:
         """Emergency stop"""
         print("EMERGENCY STOP!")
         self.command.set_emergency_stop()
+
+    def cancel_emergency_stop(self):
+        """Cancel emergency stop"""
+        self.command.cancel_emergency_stop()
 
     def adjust_stepper(self, delta_units):
         """Adjust stepper target position in command units"""
