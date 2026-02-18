@@ -26,7 +26,7 @@
 #define STEPPER_IN2 22
 #define STEPPER_IN3 19
 #define STEPPER_IN4 18
-#define STEPPER_MAX_SPEED 800.0f
+#define STEPPER_MAX_SPEED 100.0f
 #define STEPPER_ACCEL 600.0f
 #define STEPPER_COMMAND_SCALE 10
 
@@ -52,10 +52,10 @@ uint8_t bridgeMacAddress[] = {0x08, 0xB6, 0x1F, 0x29, 0xD6, 0x5C};
 // Message structure - must match laptop/bridge
 typedef struct __attribute__((packed)) motor_command
 {
-  int8_t motor1_speed; // -100 to +100 (percentage)
-  int8_t motor2_speed; // -100 to +100 (percentage)
+  int8_t motor1_speed;    // -100 to +100 (percentage)
+  int8_t motor2_speed;    // -100 to +100 (percentage)
   int16_t stepper_target; // Target position (scaled by STEPPER_COMMAND_SCALE)
-  uint8_t flags;       // Bit 0: emergency stop, Bit 1: enable
+  uint8_t flags;          // Bit 0: emergency stop, Bit 1: enable
 } motor_command;
 motor_command currentCommand = {0, 0, 0, 0};
 motor_command targetCommand = {0, 0, 0, 0};
@@ -63,7 +63,7 @@ motor_command targetCommand = {0, 0, 0, 0};
 // ============== STATE VARIABLES ==============
 unsigned long lastCommandTime = 0;
 int8_t actualSpeed[2] = {0, 0}; // Current motor speeds after ramping
-bool motorsEnabled = false;        // Fail-safe: start disabled until enable flag received
+bool motorsEnabled = false;     // Fail-safe: start disabled until enable flag received
 bool espNowReady = false;
 
 AccelStepper stepper(AccelStepper::FULL4WIRE, STEPPER_IN1, STEPPER_IN3, STEPPER_IN2, STEPPER_IN4);
