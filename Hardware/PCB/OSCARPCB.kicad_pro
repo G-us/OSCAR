@@ -504,7 +504,7 @@
       "plot": "V1GRBROUTPUT/",
       "pos_files": "",
       "specctra_dsn": "",
-      "step": "",
+      "step": "OSCARPCB.step",
       "svg": "",
       "vrml": ""
     },
