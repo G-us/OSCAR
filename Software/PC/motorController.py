@@ -218,6 +218,8 @@ class KeyboardController:
         print("  D -> Rotate Right")
         print("  R -> Stepper +")
         print("  F -> Stepper -")
+        print("  T -> Stepper to 0")
+        print("  SHIFT -> Slow Rotate")
         print("  SPACE -> Emergency Stop")
         print("  ESC -> Quit")
 
@@ -237,6 +239,7 @@ class KeyboardController:
         # Stepper target increments
         keyboard.on_press_key('r', lambda _: self.adjust_stepper(self.stepper_step))
         keyboard.on_press_key('f', lambda _: self.adjust_stepper(-self.stepper_step))
+        keyboard.on_press_key('t', lambda _: self.SetStepperAbsolute(0))
 
         # Release keys to stop
         keyboard.on_release_key('w', lambda _: self.set_both_motors(0, 0))
@@ -273,6 +276,10 @@ class KeyboardController:
             print("Slow rotation disabled")
             self.rotateSpeed = 75
 
+    def SetStepperAbsolute(self, position):
+        self.command.stepper_target = position
+        self.command.clamp_stepper_target()
+        print(f"Stepper target set to {position}")
 
 # ============== MAIN CONTROLLER ==============
 class MotorControllerApp:

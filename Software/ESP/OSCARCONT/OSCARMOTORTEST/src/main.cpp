@@ -66,7 +66,7 @@ int8_t actualSpeed[2] = {0, 0}; // Current motor speeds after ramping
 bool motorsEnabled = false;     // Fail-safe: start disabled until enable flag received
 bool espNowReady = false;
 
-AccelStepper stepper(AccelStepper::FULL4WIRE, STEPPER_IN1, STEPPER_IN3, STEPPER_IN2, STEPPER_IN4);
+AccelStepper stepper(AccelStepper::FULL4WIRE, STEPPER_IN1, STEPPER_IN2, STEPPER_IN3, STEPPER_IN4);
 
 // ============== FUNCTION PROTOTYPES ==============
 void setupMotors();

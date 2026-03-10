@@ -13,6 +13,10 @@
 		{
 			"name": "OSCARMOTORTEST",
 			"path": "Software/ESP/OSCARCONT/OSCARMOTORTEST"
+		},
+		{
+			"name": "OSCARSTEPPERTEST",
+			"path": "Software/ESP/OSCARSTEPPERTEST"
 		}
 	],
 	"settings": {}
