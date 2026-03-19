@@ -228,12 +228,12 @@ class KeyboardController:
         print("  ESC -> Quit")
 
         # Forward/Backward
-        keyboard.on_press_key('w', lambda _: self.set_both_motors(100, -100))
-        keyboard.on_press_key('s', lambda _: self.set_both_motors(-100, 100))
+        keyboard.on_press_key('w', lambda _: self.set_both_motors(-100, 100))
+        keyboard.on_press_key('s', lambda _: self.set_both_motors(100, -100))
 
         # Rotation
-        keyboard.on_press_key('a', lambda _: self.set_both_motors(-self.rotateSpeed, self.rotateSpeed))
-        keyboard.on_press_key('d', lambda _: self.set_both_motors(self.rotateSpeed, -self.rotateSpeed))
+        keyboard.on_press_key('a', lambda _: self.set_both_motors(self.rotateSpeed, self.rotateSpeed))
+        keyboard.on_press_key('d', lambda _: self.set_both_motors(-self.rotateSpeed, -self.rotateSpeed))
         keyboard.on_press_key('shift', lambda _: self.setSlowRotate(True))
         keyboard.on_release_key('shift', lambda _: self.setSlowRotate(False))
 
