@@ -12,23 +12,27 @@
 // ============== MOTOR CONFIGURATION ==============
 // L293N Pin Definitions for 2 DC Motors
 // Motor 1
-#define MOTOR1_IN1 13
-#define MOTOR1_IN2 12
-#define MOTOR1_EN 14
+#define MOTOR1_IN1 22
+#define MOTOR1_IN2 21
+#define MOTOR1_EN 23
 
 // Motor 2
-#define MOTOR2_IN1 27
-#define MOTOR2_IN2 26
-#define MOTOR2_EN 25
+#define MOTOR2_IN1 19
+#define MOTOR2_IN2 18
+#define MOTOR2_EN 5
 
 // Stepper Configuration (L298N 4-wire driver)
-#define STEPPER_IN1 23
-#define STEPPER_IN2 22
-#define STEPPER_IN3 19
-#define STEPPER_IN4 18
-#define STEPPER_MAX_SPEED 100.0f
+#define STEPPER_EN1 26
+#define STEPPER_IN1 25
+#define STEPPER_IN2 33
+
+#define STEPPER_IN3 32
+#define STEPPER_IN4 14
+#define STEPPER_EN2 27
+
+#define STEPPER_MAX_SPEED 400.0f
 #define STEPPER_ACCEL 600.0f
-#define STEPPER_COMMAND_SCALE 10
+#define STEPPER_COMMAND_SCALE 100
 
 // PWM Configuration
 #define PWM_FREQ 1000    // 1kHz PWM frequency
@@ -65,6 +69,8 @@ unsigned long lastCommandTime = 0;
 int8_t actualSpeed[2] = {0, 0}; // Current motor speeds after ramping
 bool motorsEnabled = false;     // Fail-safe: start disabled until enable flag received
 bool espNowReady = false;
+// Track whether the stepper driver enable pins are currently driven active
+bool stepperEnabled = false;
 
 AccelStepper stepper(AccelStepper::FULL4WIRE, STEPPER_IN1, STEPPER_IN2, STEPPER_IN3, STEPPER_IN4);
 
@@ -74,6 +80,7 @@ void setupESPNow();
 bool initESPNowWithRetry();
 bool addPeerWithRetry(const uint8_t *peerMac);
 void updateMotors();
+void updateStepperEnable();
 void setMotorSpeed(uint8_t motorNum, int8_t speed);
 void emergencyStop();
 void onDataReceived(const uint8_t *mac, const uint8_t *data, int len);
@@ -92,22 +99,32 @@ void setup()
 
 void loop()
 {
+  // Run the stepper as often as possible (AccelStepper requires frequent calls)
+  stepper.run();
+  updateStepperEnable();
+
+  // Control loop runs at 50Hz (every 20ms)
+  static unsigned long lastControl = 0;
+  unsigned long now = millis();
+  if (now - lastControl < 20)
+    return;
+  lastControl = now;
+
   // If ESP-NOW not ready, keep motors stopped and retry periodically
   if (!espNowReady)
   {
     emergencyStop();
     static unsigned long lastRetry = 0;
-    if (millis() - lastRetry > 2000)
+    if (now - lastRetry > 2000)
     {
-      lastRetry = millis();
+      lastRetry = now;
       setupESPNow();
     }
-    delay(20);
     return;
   }
 
   // Watchdog: Stop motors if no command received recently
-  if (millis() - lastCommandTime > WATCHDOG_TIMEOUT)
+  if (now - lastCommandTime > WATCHDOG_TIMEOUT)
   {
     if (motorsEnabled)
     {
@@ -152,11 +169,6 @@ void loop()
 
   // Update motor outputs
   updateMotors();
-
-  // Run stepper regardless to allow decel to complete
-  stepper.run();
-
-  delay(20); // 50Hz control loop
 }
 
 // ============== MOTOR CONTROL FUNCTIONS ==============
@@ -180,6 +192,13 @@ void setupMotors()
   stepper.setMaxSpeed(STEPPER_MAX_SPEED);
   stepper.setAcceleration(STEPPER_ACCEL);
   stepper.setCurrentPosition(0);
+
+  // Ensure enable pins are outputs and start disabled (stepper not moving)
+  pinMode(STEPPER_EN1, OUTPUT);
+  pinMode(STEPPER_EN2, OUTPUT);
+  digitalWrite(STEPPER_EN1, LOW);
+  digitalWrite(STEPPER_EN2, LOW);
+  stepperEnabled = false;
 
   // Start with motors stopped
   emergencyStop();
@@ -268,6 +287,23 @@ void updateMotors()
   setMotorSpeed(2, actualSpeed[1]);
 }
 
+void updateStepperEnable()
+{
+  bool moving = (stepper.distanceToGo() != 0);
+  if (moving && !stepperEnabled)
+  {
+    digitalWrite(STEPPER_EN1, HIGH);
+    digitalWrite(STEPPER_EN2, HIGH);
+    stepperEnabled = true;
+  }
+  else if (!moving && stepperEnabled)
+  {
+    digitalWrite(STEPPER_EN1, LOW);
+    digitalWrite(STEPPER_EN2, LOW);
+    stepperEnabled = false;
+  }
+}
+
 void setMotorSpeed(uint8_t motorNum, int8_t speed)
 {
   // Clamp speed to valid range
@@ -304,6 +340,11 @@ void emergencyStop()
   digitalWrite(MOTOR2_IN1, LOW);
   digitalWrite(MOTOR2_IN2, LOW);
 
+  // Disable stepper driver when not moving
+  digitalWrite(STEPPER_EN1, LOW);
+  digitalWrite(STEPPER_EN2, LOW);
+  stepperEnabled = false;
+
   actualSpeed[0] = 0;
   actualSpeed[1] = 0;
   targetCommand.motor1_speed = 0;
@@ -337,6 +378,13 @@ void onDataReceived(const uint8_t *mac, const uint8_t *data, int len)
 
   if (motorsEnabled)
   {
+    if ((long)targetCommand.stepper_target == 6969)
+    {
+      // Special code to reset stepper position
+      stepper.setCurrentPosition(0);
+      stepper.moveTo(0); // Stop any current motion
+      Serial.println("Stepper position reset to 0");
+    }
     long targetSteps = (long)targetCommand.stepper_target * STEPPER_COMMAND_SCALE;
     stepper.moveTo(targetSteps);
   }

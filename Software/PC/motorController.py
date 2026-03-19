@@ -3,6 +3,7 @@ ESP-NOW Motor Controller - Laptop Side
 Sends motor commands to ESP32 via Serial Bridge
 Supports Xbox controller and keyboard input
 """
+from time import sleep
 
 import serial
 import struct
@@ -33,7 +34,7 @@ except ImportError:
     print("Install with: pip install keyboard")
 
 # ============== CONFIGURATION ==============
-SERIAL_PORT = 'COM4'  # Change to your ESP32 serial port
+SERIAL_PORT = 'COM5'  # Change to your ESP32 serial port
 BAUD_RATE = 115200
 SEND_RATE = 50  # Hz (20ms between packets)
 
@@ -219,13 +220,16 @@ class KeyboardController:
         print("  R -> Stepper +")
         print("  F -> Stepper -")
         print("  T -> Stepper to 0")
+        print("Y -> Stepper +2")
+        print("  H -> Stepper -2")
+        print("  P -> Reset Stepper")
         print("  SHIFT -> Slow Rotate")
         print("  SPACE -> Emergency Stop")
         print("  ESC -> Quit")
 
         # Forward/Backward
-        keyboard.on_press_key('w', lambda _: self.set_both_motors(-75, -75))
-        keyboard.on_press_key('s', lambda _: self.set_both_motors(75, 75))
+        keyboard.on_press_key('w', lambda _: self.set_both_motors(100, -100))
+        keyboard.on_press_key('s', lambda _: self.set_both_motors(-100, 100))
 
         # Rotation
         keyboard.on_press_key('a', lambda _: self.set_both_motors(-self.rotateSpeed, self.rotateSpeed))
@@ -240,6 +244,12 @@ class KeyboardController:
         keyboard.on_press_key('r', lambda _: self.adjust_stepper(self.stepper_step))
         keyboard.on_press_key('f', lambda _: self.adjust_stepper(-self.stepper_step))
         keyboard.on_press_key('t', lambda _: self.SetStepperAbsolute(0))
+        keyboard.on_press_key('g', lambda _: self.SetStepperAbsolute(-85))
+
+        keyboard.on_press_key('y', lambda _: self.adjust_stepper(2))
+        keyboard.on_press_key('h', lambda _: self.adjust_stepper(-2))
+
+        keyboard.on_press_key('p', lambda _: self.resetStepperPosition())
 
         # Release keys to stop
         keyboard.on_release_key('w', lambda _: self.set_both_motors(0, 0))
@@ -280,6 +290,13 @@ class KeyboardController:
         self.command.stepper_target = position
         self.command.clamp_stepper_target()
         print(f"Stepper target set to {position}")
+
+    def resetStepperPosition(self):
+        self.command.stepper_target = 6969
+        self.command.clamp_stepper_target()
+        sleep(0.05)
+        self.command.stepper_target = 0
+        self.command.clamp_stepper_target()
 
 # ============== MAIN CONTROLLER ==============
 class MotorControllerApp:

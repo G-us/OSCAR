@@ -15,16 +15,16 @@ uint8_t motorControllerMAC[] = {0x08, 0xB6, 0x1F, 0x28, 0x96, 0xDC};
 // Resilience Configuration
 #define ESPNOW_INIT_RETRIES 5
 #define ESPNOW_RETRY_DELAY_MS 250
-#define PEER_ADD_RETRIES 3
+#define PEER_ADD_RETRIES 10
 #define SERIAL_PACKET_TIMEOUT_MS 20
 
 // Message structure - must match motor controller and Python
 typedef struct __attribute__((packed)) motor_command
 {
-  int8_t motor1_speed;   // -100 to +100
-  int8_t motor2_speed;   // -100 to +100
+  int8_t motor1_speed;    // -100 to +100
+  int8_t motor2_speed;    // -100 to +100
   int16_t stepper_target; // Target position (scaled by controller)
-  uint8_t flags;         // Control flags
+  uint8_t flags;          // Control flags
 } motor_command;
 
 // ============== STATE VARIABLES ==============
